@@ -1,0 +1,7 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      AIO_AGENTOS_API_KEY: ${AIO_AGENTOS_API_KEY:-}

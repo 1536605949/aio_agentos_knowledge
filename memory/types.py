@@ -1,0 +1,42 @@
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from enum import Enum
+from typing import Any
+from uuid import uuid4
+
+from pydantic import BaseModel, Field
+
+
+class MemoryType(str, Enum):
+    SHORT = "short"
+    LONG = "long"
+    VECTOR = "vector"
+    EPISODIC = "episodic"
+
+
+class MemoryRecord(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    workflow_id: str
+    memory_type: MemoryType
+    content: dict[str, Any]
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    tags: list[str] = Field(default_factory=list)
+
+
+class ShortMemory(MemoryRecord):
+    memory_type: MemoryType = MemoryType.SHORT
+
+
+class LongMemory(MemoryRecord):
+    memory_type: MemoryType = MemoryType.LONG
+
+
+class VectorMemory(MemoryRecord):
+    memory_type: MemoryType = MemoryType.VECTOR
+    embedding_ref: str | None = None
+
+
+class EpisodicMemory(MemoryRecord):
+    memory_type: MemoryType = MemoryType.EPISODIC
+    outcome: str | None = None

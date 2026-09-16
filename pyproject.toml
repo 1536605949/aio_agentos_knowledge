@@ -1,0 +1,75 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aio-agentos"
+version = "3.5.0"
+description = "AIOps incident reasoning and governed remediation reference architecture"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "pydantic>=2.10,<3",
+  "fastapi>=0.115,<1",
+  "uvicorn[standard]>=0.30,<1",
+]
+
+[project.optional-dependencies]
+orchestration = [
+  "langgraph>=0.3,<1",
+  "temporalio>=1.9,<2",
+  "mcp>=1.0,<2",
+]
+dev = [
+  "pytest>=8,<9",
+  "pytest-asyncio>=0.24,<1",
+  "httpx>=0.27,<1",
+  "ruff>=0.9,<1",
+  "import-linter>=2.1,<3",
+]
+
+[tool.setuptools]
+py-modules = []
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+  "ontology*", "memory*", "observability*", "runtime*", "governance*", "tools*",
+  "skills*", "router*", "agents*", "graph*", "temporal*", "protocol*", "api*"
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.importlinter]
+root_packages = [
+  "ontology", "memory", "observability", "runtime", "governance", "tools",
+  "skills", "router", "agents", "graph", "temporal", "protocol", "api"
+]
+
+[[tool.importlinter.contracts]]
+name = "Observability is a leaf dependency"
+type = "forbidden"
+source_modules = ["observability"]
+forbidden_modules = ["ontology", "memory", "runtime", "governance", "tools", "skills", "router", "agents", "graph", "temporal", "protocol", "api"]
+
+[[tool.importlinter.contracts]]
+name = "Ontology and memory do not depend on orchestration"
+type = "forbidden"
+source_modules = ["ontology", "memory"]
+forbidden_modules = ["graph", "temporal", "api"]
+
+[[tool.importlinter.contracts]]
+name = "Protocol is not imported by knowledge layers"
+type = "forbidden"
+source_modules = ["ontology", "memory"]
+forbidden_modules = ["protocol"]

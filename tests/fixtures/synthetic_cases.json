@@ -1,0 +1,23 @@
+[
+  {
+    "id": "s1",
+    "logs": [
+      "upstream timeout from payment"
+    ],
+    "expected": "upstream_timeout"
+  },
+  {
+    "id": "s2",
+    "logs": [
+      "OOM memory limit exceeded"
+    ],
+    "expected": "resource_exhaustion"
+  },
+  {
+    "id": "s3",
+    "logs": [
+      "database connection refused"
+    ],
+    "expected": "database_dependency_failure"
+  }
+]

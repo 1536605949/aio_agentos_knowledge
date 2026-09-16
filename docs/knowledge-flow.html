@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>AIO-AgentOS v3.5 Architecture</title>
+<style>
+body{font-family:system-ui,sans-serif;max-width:1000px;margin:40px auto;line-height:1.6}
+.shell{border:3px solid #333;padding:24px;border-radius:12px}
+.inner{border:2px dashed #666;padding:18px;margin:16px 0}
+.cross{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}
+.card{border:1px solid #999;padding:12px;border-radius:8px}
+code{background:#f2f2f2;padding:2px 5px}
+</style>
+</head>
+<body>
+<h1>AIO-AgentOS v3.5 正确控制拓扑</h1>
+<p>Alarm / API / Kafka 进入持久化外层 Workflow；Ontology、Governance、Memory、Observability 是共享/横切能力，不是串行流水线阶段。</p>
+<div class="shell">
+  <h2>Temporal Durable Workflow（外层）</h2>
+  <p>状态、重试、超时、审批等待、Signal、补偿边界</p>
+  <div class="inner">
+    <h3>LangGraph / Reasoning Activity（内层）</h3>
+    <p>Evidence → Reasoning → Proposed Action → Supervisor</p>
+  </div>
+  <p><strong>Tool call → Governance interceptor → HIGH risk WAITING_APPROVAL → Signal → governed execution</strong></p>
+</div>
+<div class="cross">
+  <div class="card"><b>Ontology</b><br>共享只读 TBox</div>
+  <div class="card"><b>Memory</b><br>全程显式读写</div>
+  <div class="card"><b>Observability</b><br>每节点/Tool Span</div>
+  <div class="card"><b>Protocol</b><br>MCP outbound / A2A inbound</div>
+</div>
+</body>
+</html>
