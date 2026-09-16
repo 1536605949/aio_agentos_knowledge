@@ -3,11 +3,30 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+.import_linter_cache/
 .venv/
+venv/
 .env
 dist/
 build/
 *.egg-info/
 .coverage
 htmlcov/
+
+# 本地持久化产物（SQLite 文档存储）
+*.db
+*.db-wal
+*.db-shm
+
+# BadCase / Trace 导出
+*.jsonl
+badcases/
+
+# 临时脚本
+_smoke.py
+_tmp_*.py
+
+# 工具与编辑器
 .workbuddy-ai/
+.idea/
+.vscode/

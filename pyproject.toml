@@ -15,6 +15,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# 真实 LLM provider（OpenAI / DeepSeek / vLLM / 内部网关）所需的 HTTP 客户端
+openai = ["httpx>=0.27,<1"]
+# 用 LangChain 作为 ChatModel 适配层（提示词资产仍由本项目管理）
+langchain = ["langchain-core>=0.3,<1", "langchain-openai>=0.2,<1"]
+# 生产级持久化编排：Temporal Server + LangGraph + MCP
 orchestration = [
   "langgraph>=0.3,<1",
   "temporalio>=1.9,<2",
@@ -28,14 +33,18 @@ dev = [
   "import-linter>=2.1,<3",
 ]
 
+[project.scripts]
+aio-agentos = "cli:main"
+
 [tool.setuptools]
-py-modules = []
+py-modules = ["bootstrap", "cli", "config"]
 
 [tool.setuptools.packages.find]
 where = ["."]
 include = [
   "ontology*", "memory*", "observability*", "runtime*", "governance*", "tools*",
-  "skills*", "router*", "agents*", "graph*", "temporal*", "protocol*", "api*"
+  "skills*", "router*", "agents*", "graph*", "temporal*", "protocol*", "api*",
+  "llm*", "resilience*", "concurrency*", "persistence*", "examples*"
 ]
 
 [tool.pytest.ini_options]
@@ -51,25 +60,71 @@ select = ["E", "F", "I", "B", "UP"]
 ignore = ["E501"]
 
 [tool.importlinter]
+# 注意：root_packages 只能列包（目录 + __init__.py）。
+# 顶层单文件模块（config.py / bootstrap.py / cli.py）不参与分层契约，
+# 它们只被允许被上层引用，不允许反向依赖领域层。
 root_packages = [
   "ontology", "memory", "observability", "runtime", "governance", "tools",
-  "skills", "router", "agents", "graph", "temporal", "protocol", "api"
+  "skills", "router", "agents", "graph", "temporal", "protocol", "api",
+  "llm", "resilience", "concurrency", "persistence",
+]
+
+# --- 基础设施层：必须保持为"叶子"，可被任何上层安全引用 ---
+
+[[tool.importlinter.contracts]]
+name = "Observability does not depend on domain or orchestration layers"
+type = "forbidden"
+source_modules = ["observability"]
+forbidden_modules = [
+  "ontology", "memory", "runtime", "governance", "tools", "skills", "router",
+  "agents", "graph", "temporal", "protocol", "api", "llm",
 ]
 
 [[tool.importlinter.contracts]]
-name = "Observability is a leaf dependency"
+name = "LLM layer does not depend on domain or orchestration layers"
 type = "forbidden"
-source_modules = ["observability"]
-forbidden_modules = ["ontology", "memory", "runtime", "governance", "tools", "skills", "router", "agents", "graph", "temporal", "protocol", "api"]
+source_modules = ["llm"]
+forbidden_modules = [
+  "ontology", "memory", "runtime", "governance", "tools", "skills", "router",
+  "agents", "graph", "temporal", "protocol", "api", "persistence",
+]
+
+[[tool.importlinter.contracts]]
+name = "Resilience and concurrency are infrastructure leaves"
+type = "forbidden"
+source_modules = ["resilience", "concurrency"]
+forbidden_modules = [
+  "ontology", "memory", "runtime", "governance", "tools", "skills", "router",
+  "agents", "graph", "temporal", "protocol", "api", "llm", "persistence",
+]
+
+[[tool.importlinter.contracts]]
+name = "Persistence does not depend on domain or orchestration layers"
+type = "forbidden"
+source_modules = ["persistence"]
+forbidden_modules = [
+  "ontology", "memory", "runtime", "governance", "tools", "skills", "router",
+  "agents", "graph", "temporal", "protocol", "api", "llm", "resilience", "concurrency",
+]
+
+# --- 知识层：只读、不反向依赖编排 ---
 
 [[tool.importlinter.contracts]]
 name = "Ontology and memory do not depend on orchestration"
 type = "forbidden"
 source_modules = ["ontology", "memory"]
-forbidden_modules = ["graph", "temporal", "api"]
+forbidden_modules = [
+  "graph", "temporal", "api", "llm", "tools", "agents", "router", "skills", "persistence",
+]
 
 [[tool.importlinter.contracts]]
 name = "Protocol is not imported by knowledge layers"
 type = "forbidden"
 source_modules = ["ontology", "memory"]
 forbidden_modules = ["protocol"]
+
+[[tool.importlinter.contracts]]
+name = "Governance is a pure policy layer"
+type = "forbidden"
+source_modules = ["governance"]
+forbidden_modules = ["agents", "graph", "temporal", "api", "router", "skills", "tools"]

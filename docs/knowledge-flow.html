@@ -2,33 +2,381 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>AIO-AgentOS v3.5 Architecture</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AIO-AgentOS v3.5 · 控制拓扑与知识流</title>
 <style>
-body{font-family:system-ui,sans-serif;max-width:1000px;margin:40px auto;line-height:1.6}
-.shell{border:3px solid #333;padding:24px;border-radius:12px}
-.inner{border:2px dashed #666;padding:18px;margin:16px 0}
-.cross{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}
-.card{border:1px solid #999;padding:12px;border-radius:8px}
-code{background:#f2f2f2;padding:2px 5px}
+  :root{
+    --bg:#f7f8fa; --panel:#ffffff; --ink:#1a1d21; --muted:#5b6470;
+    --line:#e3e6ea; --line-strong:#c9ced6;
+    --accent:#2f6fed; --accent-soft:#eaf1ff;
+    --ok:#1f9d63; --warn:#c47f13; --danger:#d0453b; --danger-soft:#fdeceb;
+    --purple:#7a4fd6; --purple-soft:#f1ecfe;
+    --teal:#0e8f92; --teal-soft:#e5f6f6;
+    --radius:10px;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; padding:32px 20px 64px;
+    background:var(--bg); color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    line-height:1.65; font-size:15px;
+  }
+  .wrap{max-width:1080px;margin:0 auto}
+  header{margin-bottom:28px}
+  h1{font-size:26px;margin:0 0 6px;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:14px;margin:0}
+  h2{font-size:17px;margin:36px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+  h3{font-size:14px;margin:0 0 8px}
+  p{margin:0 0 12px}
+  code{font-family:var(--mono);font-size:12.5px;background:#eef0f3;padding:1.5px 5px;border-radius:4px}
+  .legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;color:var(--muted);margin:10px 0 0}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
+
+  /* 分层壳 */
+  .layer{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+         padding:14px 16px;margin-bottom:10px;position:relative}
+  .layer > .tag{position:absolute;top:-9px;left:14px;background:var(--panel);
+                border:1px solid var(--line);border-radius:20px;padding:1px 10px;
+                font-size:11px;color:var(--muted);letter-spacing:.04em}
+  .layer.accent{border-color:#bcd2f8;background:linear-gradient(180deg,#fbfcff,#ffffff)}
+  .layer-title{font-size:13.5px;font-weight:600;margin:4px 0 8px}
+  .layer-note{font-size:12.5px;color:var(--muted);margin:0}
+
+  /* 嵌套壳 */
+  .shell{border:1.5px solid var(--line-strong);border-radius:var(--radius);padding:16px;background:var(--panel)}
+  .shell-outer{border-color:#bcd2f8;background:linear-gradient(180deg,#f8fbff,#ffffff)}
+  .shell-inner{border-style:dashed;border-color:#c7b8ee;background:var(--purple-soft);margin-top:12px}
+  .shell-head{font-size:13px;font-weight:600;margin-bottom:4px}
+  .shell-sub{font-size:12px;color:var(--muted);margin:0 0 10px}
+
+  /* 横切能力 */
+  .cross{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:12px}
+  .card{border:1px solid var(--line);border-radius:9px;padding:11px 13px;background:var(--panel)}
+  .card b{display:block;font-size:13px;margin-bottom:3px}
+  .card span{font-size:12px;color:var(--muted)}
+  .card.k-onto{border-color:#cfc0f2;background:var(--purple-soft)}
+  .card.k-obs{border-color:#bfe3e4;background:var(--teal-soft)}
+  .card.k-gov{border-color:#f0cfc9;background:var(--danger-soft)}
+  .card.k-inf{border-color:#c6d7f7;background:var(--accent-soft)}
+
+  /* 步骤链 */
+  .flow{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+        padding:16px 18px;overflow-x:auto}
+  ol.steps{list-style:none;margin:0;padding:0;counter-reset:s}
+  ol.steps li{position:relative;padding:7px 0 7px 40px;counter-increment:s;font-size:13.5px;
+              border-bottom:1px dashed var(--line)}
+  ol.steps li:last-child{border-bottom:0}
+  ol.steps li::before{content:counter(s);position:absolute;left:0;top:6px;
+      width:23px;height:23px;border-radius:50%;background:#eef0f3;color:var(--muted);
+      font-size:11.5px;font-weight:600;display:flex;align-items:center;justify-content:center;
+      font-family:var(--mono)}
+  ol.steps li.hot::before{background:var(--danger);color:#fff}
+  ol.steps li.hot{background:var(--danger-soft);border-radius:6px;padding-left:46px;margin-left:-6px}
+  ol.steps li.hot::before{left:6px}
+  ol.steps li .note{display:block;color:var(--muted);font-size:12px}
+  ol.steps li.cut{border-top:2px solid var(--danger);margin-top:4px;padding-top:11px}
+  ol.steps li.cut::after{content:"↑ 以上在重试循环之外";position:absolute;right:0;top:-9px;
+      font-size:11px;color:var(--danger);background:var(--panel);padding:0 6px}
+
+  /* 调用树 */
+  pre.tree{font-family:var(--mono);font-size:12.5px;line-height:1.75;background:#fbfcfd;
+           border:1px solid var(--line);border-radius:9px;padding:14px 16px;overflow-x:auto;margin:0}
+  pre.tree b{font-weight:600}
+  .kw{color:var(--accent)} .ka{color:var(--purple)} .kt{color:var(--teal)} .kg{color:var(--danger)}
+
+  /* 表格 */
+  table{width:100%;border-collapse:collapse;font-size:13px;background:var(--panel);
+        border:1px solid var(--line);border-radius:var(--radius);overflow:hidden}
+  th,td{text-align:left;padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{background:#f2f4f7;font-weight:600;font-size:12.5px;color:var(--muted)}
+  tr:last-child td{border-bottom:0}
+  td code{background:#eef0f3}
+
+  .pill{display:inline-block;font-size:11px;padding:1px 8px;border-radius:20px;
+        font-family:var(--mono);border:1px solid transparent}
+  .p-low{background:#e8f6ef;color:#1a7a4d;border-color:#c2e6d5}
+  .p-med{background:#fdf3e0;color:#9a6209;border-color:#f0dcb4}
+  .p-high{background:var(--danger-soft);color:#a5342c;border-color:#f0cfc9}
+
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:760px){.grid2{grid-template-columns:1fr}}
+  .foot{margin-top:36px;padding-top:16px;border-top:1px solid var(--line);
+        font-size:12.5px;color:var(--muted)}
 </style>
 </head>
 <body>
-<h1>AIO-AgentOS v3.5 正确控制拓扑</h1>
-<p>Alarm / API / Kafka 进入持久化外层 Workflow；Ontology、Governance、Memory、Observability 是共享/横切能力，不是串行流水线阶段。</p>
-<div class="shell">
-  <h2>Temporal Durable Workflow（外层）</h2>
-  <p>状态、重试、超时、审批等待、Signal、补偿边界</p>
-  <div class="inner">
-    <h3>LangGraph / Reasoning Activity（内层）</h3>
-    <p>Evidence → Reasoning → Proposed Action → Supervisor</p>
+<div class="wrap">
+
+<header>
+  <h1>AIO-AgentOS v3.5 · 控制拓扑与知识流</h1>
+  <p class="sub">告警进入持久化外层工作流；本体、治理、记忆、可观测是<strong>共享/横切能力</strong>，不是串行流水线阶段。</p>
+  <div class="legend">
+    <span><i style="background:#bcd2f8"></i>编排</span>
+    <span><i style="background:#cfc0f2"></i>知识</span>
+    <span><i style="background:#f0cfc9"></i>治理</span>
+    <span><i style="background:#bfe3e4"></i>可观测</span>
+    <span><i style="background:#c6d7f7"></i>基础设施</span>
   </div>
-  <p><strong>Tool call → Governance interceptor → HIGH risk WAITING_APPROVAL → Signal → governed execution</strong></p>
+</header>
+
+<h2>一、双层编排：嵌套，不是串行</h2>
+<p>这是本项目最容易误解的一处。Temporal 语义的持久化外壳与推理图是<strong>嵌套关系</strong>：
+外层负责「跨小时~天级的状态、超时、审批挂起」，内层负责「毫秒~秒级的推理」。
+推理图做完就返回，<strong>不持有跨重启状态</strong>。</p>
+
+<div class="shell shell-outer">
+  <div class="shell-head">① 外层 · 持久化工作流（<code>temporal/workflow.py</code>）</div>
+  <p class="shell-sub">状态机 · 审批挂起/恢复 · 超时默认拒绝 · 幂等键落库 · 职责分离</p>
+
+  <div class="shell shell-inner">
+    <div class="shell-head">② 内层 · 推理图（<code>graph/pipeline.py</code>）</div>
+    <p class="shell-sub">一次 Activity 内运行：6 个节点，手写执行器与 LangGraph 执行器<strong>共用同一批节点函数</strong></p>
+    <p class="layer-note" style="margin:0">
+      <code>normalize_alarm</code> → <code>collect_topology</code> → <code>collect_logs</code>
+      → <code>reason</code> → <code>propose</code> → <code>supervise</code>
+    </p>
+  </div>
+
+  <p class="layer-note" style="margin:12px 0 0">
+    <strong>工具调用 → 治理拦截器 → 高风险动作挂起 <code>WAITING_APPROVAL</code> → 审批信号 → 受治理执行</strong>
+  </p>
 </div>
+
+<h2>二、横切能力：不是流水线阶段</h2>
+<p>下面四项<strong>同时</strong>服务于编排层与推理层，任何一层都可以调用它们，它们不参与"第几步"的顺序。</p>
+
 <div class="cross">
-  <div class="card"><b>Ontology</b><br>共享只读 TBox</div>
-  <div class="card"><b>Memory</b><br>全程显式读写</div>
-  <div class="card"><b>Observability</b><br>每节点/Tool Span</div>
-  <div class="card"><b>Protocol</b><br>MCP outbound / A2A inbound</div>
+  <div class="card k-onto">
+    <b>Ontology · 只读 TBox</b>
+    <span>领域词表唯一定义一次，被三处消费：Prompt 渲染 · 公理校验 · Agent 输出校验</span>
+  </div>
+  <div class="card k-gov">
+    <b>Governance · 工具拦截器</b>
+    <span>风险分级 · RBAC · 策略检查位于<strong>重试循环之外</strong></span>
+  </div>
+  <div class="card k-obs">
+    <b>Observability · 父子树 Span</b>
+    <span><code>contextvars</code> 维护 Span 栈 · 异常也落盘 · 跨重启可回读</span>
+  </div>
+  <div class="card k-inf">
+    <b>Memory / Persistence</b>
+    <span>Episodic 记忆 + <code>DocumentStore</code>（workflows / traces / 幂等 / badcases）</span>
+  </div>
+  <div class="card k-inf">
+    <b>Resilience · 限流缓存</b>
+    <span>令牌桶 · TTL+LRU 缓存 · 资源锁 · 熔断</span>
+  </div>
+  <div class="card k-inf">
+    <b>Protocol · A2A / MCP</b>
+    <span>AgentCard 与 MCP 工具目录从注册表<strong>动态生成</strong></span>
+  </div>
+</div>
+
+<h2>三、工具调用链：10 步，顺序即设计</h2>
+<p>治理检查必须发生在重试循环<strong>之外</strong>。否则策略拒绝会被当成瞬时故障重试 3 次，
+最终报 <code>ToolError</code> 而不是 <code>ToolPolicyDenied</code>——
+<strong>运维看到的是"工具不稳定"，而不是"有人试图越权"</strong>。</p>
+
+<div class="flow">
+<ol class="steps">
+  <li>存在性检查 <span class="note">未注册 → <code>ToolNotFound</code>，不做隐式放行</span></li>
+  <li>熔断检查 <span class="note">连续失败达阈值 → <code>CircuitOpen</code></span></li>
+  <li class="hot">治理检查 <span class="note">策略拒绝一次抛出，计数进 <code>policy_denials</code> 并写 BadCase</span></li>
+  <li class="hot">权限检查 <span class="note"><code>required_permission</code> ∈ principal 权限集合</span></li>
+  <li class="hot">出站限流 <span class="note">令牌桶，按 <code>tool:{name}</code> 隔离</span></li>
+  <li class="hot">幂等查询 <span class="note"><code>idempotency_key</code> 命中即返回，handler 不再执行</span></li>
+  <li class="hot">结果缓存 <span class="note"><code>cacheable</code> 工具按 payload 稳定哈希</span></li>
+  <li class="hot">资源锁 <span class="note"><code>resource_field</code> 指定的资源互斥（FIFO + 超时）</span></li>
+  <li class="cut">重试循环 <span class="note">仅对 <code>TransientToolError</code> 重试；<code>PermanentToolError</code> 立即失败</span></li>
+  <li>失败归档 <span class="note">最终失败写 BadCase，构成闭环输入</span></li>
+</ol>
+</div>
+
+<h2>四、端到端时序</h2>
+
+<pre class="tree"><b>POST /alarm</b>
+  │
+  ├─ Router            intent → skill → capability → agent → tool 白名单
+  │
+  ├─ <span class="kw">[workflow]</span>  workflow.run                       ← 持久化外壳（Span kind=workflow）
+  │    └─ <span class="kw">[graph_node]</span> graph.run                    ← 内层推理图
+  │         ├─ <span class="ka">[agent]</span> alarm        └─ <span class="kt">[llm]</span> llm.complete   ← prompt_version 记录在 Span 上
+  │         ├─ <span class="ka">[agent]</span> topology     └─ <span class="kt">[tool]</span> tool.invoke    ← 缓存命中
+  │         ├─ <span class="ka">[agent]</span> log
+  │         ├─ <span class="ka">[agent]</span> reasoning    └─ <span class="kt">[llm]</span> llm.complete   ← 受词表约束
+  │         ├─ <span class="ka">[agent]</span> remediation  └─ <span class="kt">[llm]</span> llm.complete   ← 审批门来自工具风险
+  │         └─ <span class="kg">[governance]</span> graph.supervise                 ← 本体公理校验，越界即失败
+  │
+  ├─ 高风险动作 → status = <b>waiting_approval</b>            ← 状态落库，超时默认拒绝
+  │
+<b>POST /approval/{id}</b>                                     ← approver 有 approval:decide，无 tool:high
+  │
+  ├─ executor = Principal("workflow-executor", roles={"admin"})   ← 职责分离
+  ├─ 资源锁 service:checkout
+  └─ <span class="kw">[activity]</span> workflow.remediation
+       └─ <span class="kt">[tool]</span> tool.invoke  →  策略 / 权限 / 限流 / 幂等 / 熔断
+  │
+  └─ status = <b>completed</b>
+     ├─ Trace（父子树，max_depth=4）
+     ├─ Episodic Memory（outcome="completed"）
+     ├─ Metrics（workflow_finished）
+     └─ BadCase（本路径为空）</pre>
+
+<h2>五、真实调用树（<code>aio-agentos demo</code>）</h2>
+<p>实测 14 个 Span、深度 4、<strong>2 个根节点</strong>。<code>aio-agentos check</code> 会断言
+<code>max_depth &gt;= 2</code>——扁平 Trace 无法回答"这个 LLM 调用是哪个 Agent 发起的"。</p>
+
+<pre class="tree">- <span class="kw">[workflow]</span>    workflow.run (5.8ms)
+  - <span class="kw">[graph_node]</span> graph.run (5.6ms)
+    - <span class="ka">[agent]</span>      agent.run (1.6ms)   <span style="color:#8a93a0">← alarm</span>
+      - <span class="kt">[llm]</span>      llm.complete (1.0ms)
+    - <span class="ka">[agent]</span>      agent.run (1.6ms)   <span style="color:#8a93a0">← topology</span>
+      - <span class="kt">[tool]</span>     tool.invoke (0.1ms)
+    - <span class="ka">[agent]</span>      agent.run (0.0ms)   <span style="color:#8a93a0">← log</span>
+    - <span class="ka">[agent]</span>      agent.run (0.9ms)   <span style="color:#8a93a0">← reasoning</span>
+      - <span class="kt">[llm]</span>      llm.complete (0.3ms)
+    - <span class="ka">[agent]</span>      agent.run (0.4ms)   <span style="color:#8a93a0">← remediation</span>
+      - <span class="kt">[llm]</span>      llm.complete (0.1ms)
+    - <span class="kg">[governance]</span> graph.supervise (0.0ms)
+- <span class="kw">[activity]</span>   workflow.remediation (0.4ms)   <span style="color:#8a93a0">← 第二个根：审批后才发生</span>
+  - <span class="kt">[tool]</span>     tool.invoke (0.1ms)</pre>
+
+<p class="layer-note">
+  为什么有两个根？<code>workflow.run</code> 覆盖推理阶段，它在 <code>WAITING_APPROVAL</code> 时<strong>已经返回</strong>；
+  审批与执行发生在那之后，不在它的上下文里。Span 栈如实反映真实嵌套，而不是为了让树好看而强行套一层。
+</p>
+
+<h2>六、状态所有权：三套状态，各归其位</h2>
+
+<table>
+  <thead><tr><th>状态</th><th>存活范围</th><th>是否持久化</th><th>归属</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>WorkflowState</code></td>
+      <td>跨小时~天，跨重启</td>
+      <td><strong>是</strong>（<code>workflows</code> collection）</td>
+      <td>持久化编排字段的<strong>唯一事实源</strong></td>
+    </tr>
+    <tr>
+      <td><code>AgentContext</code></td>
+      <td>单次 Agent 调用</td>
+      <td>否</td>
+      <td>用完即弃，<strong>不跨 Agent 复用</strong></td>
+    </tr>
+    <tr>
+      <td><code>IncidentGraphState</code></td>
+      <td>一次推理 Activity 内</td>
+      <td>否</td>
+      <td>推理中间结果，返回后合并进 <code>WorkflowState</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<p style="margin-top:12px"><strong>为什么审批状态必须持久化</strong>：<code>WAITING_APPROVAL</code> 是唯一会长时间挂起的状态。
+如果它只在内存里，服务重启后审批人点击批准会得到 404「工作流不存在」——
+故障无人处理，甚至可能被重复提交导致服务被重启两次。</p>
+
+<h2>七、治理：四层机械保证</h2>
+<p>「模型会不会给出一个危险动作并真的执行」这个问题，答案不是"提示词里写了不要这么做"，而是四层可执行约束。</p>
+
+<div class="grid2">
+  <div class="card">
+    <b>① 词表约束</b>
+    <span>越界动作收敛到 <code>collect_more_evidence</code>（无副作用出口），并标记 <code>ontology_violation</code></span>
+  </div>
+  <div class="card">
+    <b>② 风险驱动审批门</b>
+    <span>由 <code>ToolSpec.risk_level</code> 推导，不是 <code>action == "restart_service"</code> 这类启发式</span>
+  </div>
+  <div class="card">
+    <b>③ 拒绝不被重试掩盖</b>
+    <span>策略检查在重试循环之外；拒绝时 handler <strong>一次都没被调用</strong></span>
+  </div>
+  <div class="card">
+    <b>④ 职责分离</b>
+    <span><code>approver</code> 有 <code>approval:decide</code> 但<strong>没有</strong> <code>tool:high</code>——即使已批准也不能自己执行</span>
+  </div>
+</div>
+
+<h3 style="margin-top:18px">工具风险分级（当前 9 个工具）</h3>
+<table>
+  <thead><tr><th>工具</th><th>风险</th><th>需要的权限</th><th>幂等</th><th>缓存</th><th>资源锁</th></tr></thead>
+  <tbody>
+    <tr><td><code>topology.lookup</code></td><td><span class="pill p-low">LOW</span></td><td><code>tool:read</code></td><td>—</td><td>60s</td><td>—</td></tr>
+    <tr><td><code>logs.search</code></td><td><span class="pill p-low">LOW</span></td><td><code>tool:read</code></td><td>—</td><td>✓</td><td>—</td></tr>
+    <tr><td><code>dba.escalate</code> / <code>network.escalate</code></td><td><span class="pill p-low">LOW</span></td><td><code>tool:read</code></td><td>✓</td><td>—</td><td>—</td></tr>
+    <tr><td><code>ticket.create</code></td><td><span class="pill p-low">LOW</span></td><td><code>tool:read</code></td><td>✓</td><td>—</td><td>—</td></tr>
+    <tr><td><code>service.scale_out</code></td><td><span class="pill p-med">MEDIUM</span></td><td><code>tool:medium</code></td><td>—</td><td>—</td><td><code>service</code></td></tr>
+    <tr><td><code>service.restart</code></td><td><span class="pill p-high">HIGH</span></td><td><code>tool:high</code></td><td>✓</td><td>—</td><td><code>service</code></td></tr>
+    <tr><td><code>config.rollback</code></td><td><span class="pill p-high">HIGH</span></td><td><code>tool:high</code></td><td>✓</td><td>—</td><td><code>service</code></td></tr>
+  </tbody>
+</table>
+<p class="layer-note" style="margin-top:10px">
+  <code>demo.flaky</code> 是演示用工具（前 N 次抛瞬时错误），用于验证重试分级与熔断。<br>
+  所有 handler 返回 <code>mode: "reference"</code>，<strong>不产生真实副作用</strong>。
+</p>
+
+<h2>八、本体驱动的三处消费</h2>
+<p>领域词表在 <code>ontology/domain.py</code> <strong>唯一定义一次</strong>，然后被三个地方共同消费。
+三者任一单独存在都不够：只有 Prompt 约束，模型仍可能越界；只有输出校验，模型会浪费 token；
+只有公理校验，错误发现得太晚。</p>
+
+<table>
+  <thead><tr><th>#</th><th>消费点</th><th>作用</th><th>落点</th></tr></thead>
+  <tbody>
+    <tr><td>①</td><td>Prompt 渲染</td><td>把允许取值注入提示词，从源头约束输出空间</td><td><code>root_causes_for_prompt()</code></td></tr>
+    <tr><td>②</td><td>本体公理校验</td><td>在执行前拦截越界输出，越界即失败</td><td><code>graph.supervise</code> 节点</td></tr>
+    <tr><td>③</td><td>Agent 输出校验</td><td>越界值收敛到安全出口，并标记 <code>ontology_violation</code></td><td><code>is_valid_root_cause()</code></td></tr>
+  </tbody>
+</table>
+
+<h2>九、闭环：BadCase 到下一次迭代</h2>
+
+<pre class="tree">                生产运行
+                   │
+       ┌───────────┼───────────┬────────────┬──────────────┐
+       ▼           ▼           ▼            ▼              ▼
+    工具失败   策略拒绝    本体越界    审批拒绝/超时    用户负反馈
+       │           │           │            │              │
+       └───────────┴───────────┴────────────┴──────────────┘
+                               │
+                               ▼
+                      BadCaseCollector        ← 10 类来源全部接入
+                    （DocumentStore + JSONL）
+                               │
+                ┌──────────────┼──────────────┐
+                ▼              ▼              ▼
+           人工复盘        提示词迭代      词表/规则迭代
+        (GET /badcases)  (prompt_version) (ontology 版本)
+                │              │              │
+                └──────────────┴──────────────┘
+                               │
+                               ▼
+                          下一轮部署</pre>
+
+<p style="margin-top:12px">
+  <strong>注意 <code>policy_denied</code></strong>：它既可能是攻击尝试，也可能是权限配置过紧。
+  两者处理方式完全相反，<strong>必须人工判断</strong>，不能自动"放宽权限"。
+</p>
+
+<h2>十、质量门禁</h2>
+<table>
+  <thead><tr><th>关卡</th><th>命令</th><th>当前状态</th></tr></thead>
+  <tbody>
+    <tr><td>静态检查</td><td><code>ruff check .</code></td><td>All checks passed</td></tr>
+    <tr><td>分层契约</td><td><code>lint-imports</code></td><td>7 kept, 0 broken</td></tr>
+    <tr><td>测试</td><td><code>pytest -q</code></td><td>133 passed</td></tr>
+    <tr><td>行为自检</td><td><code>aio-agentos check</code></td><td>自检通过</td></tr>
+  </tbody>
+</table>
+
+<p class="foot">
+  AIO-AgentOS v3.5 —— AIOps 故障根因分析与受治理修复的多 Agent 运行时<strong>参考实现</strong>。<br>
+  每一条能力都有对应的可执行代码与测试；边界与未交付项统一写在
+  <code>docs/implementation-status.md</code>。
+</p>
+
 </div>
 </body>
 </html>

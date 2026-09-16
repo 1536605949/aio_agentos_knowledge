@@ -1,7 +1,13 @@
-from enum import Enum
+from enum import StrEnum
 
 
-class AgentLifecycle(str, Enum):
+class AgentLifecycle(StrEnum):
+    """单次 Agent 调用的生命周期。
+
+    迁移表是显式的：非法迁移抛 :class:`ValueError`，而不是静默改写状态。
+    注意 ``COMPLETED`` / ``FAILED`` 是终态，不可再迁移。
+    """
+
     CREATED = "created"
     RUNNING = "running"
     WAITING = "waiting"
